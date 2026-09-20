@@ -8,8 +8,9 @@ use soroban_sdk::{
 use soroban_storage_ttl::TtlStorage;
 use soroban_upgrade_governance_core::{
     emergency_upgrade as ug_emergency_upgrade, execute_upgrade as ug_execute_upgrade,
-    propose_upgrade as ug_propose_upgrade, set_guardian as ug_set_guardian,
-    set_upgrade_delay as ug_set_upgrade_delay, UpgradeGovernanceError, UpgradeGovernanceKey,
+    get_contract_version as ug_get_contract_version, propose_upgrade as ug_propose_upgrade,
+    set_guardian as ug_set_guardian, set_upgrade_delay as ug_set_upgrade_delay,
+    UpgradeGovernanceError, UpgradeGovernanceKey,
 };
 
 const REWARD_INDEX_SCALE: i128 = 1_000_000_000_000;
@@ -489,12 +490,13 @@ impl StakingPool {
     ) -> Result<(), ContractError> {
         env.extend_instance_ttl();
 
-        // mvp_staking_pool doesn't use versioning, so we use version 0
+        // mvp_staking_pool doesn't use versioning; the core requires sequential
+        // versions, so bump past the current one.
         ug_propose_upgrade(
             &env,
             &admin,
             &new_wasm_hash,
-            0, // No versioning in mvp_staking_pool
+            ug_get_contract_version(&env) + 1,
             None,
             Symbol::new(&env, "mvp_staking_pool"),
         )
@@ -539,7 +541,7 @@ impl StakingPool {
             &env,
             &admin,
             &new_wasm_hash,
-            0, // No versioning in mvp_staking_pool
+            ug_get_contract_version(&env) + 1,
             None,
             Symbol::new(&env, "mvp_staking_pool"),
             true, // Mandatory guardian for fund contracts
