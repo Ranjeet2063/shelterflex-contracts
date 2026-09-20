@@ -428,6 +428,18 @@ impl RentWallet {
     ) -> Result<(), ContractError> {
         env.extend_instance_ttl();
 
+        // Ensure current on-chain state schema matches the currently running contract
+        // before any pending state is cleared or the new wasm is deployed.
+        let current_version = Self::contract_version(env.clone());
+        let schema_version = env
+            .storage()
+            .instance()
+            .get::<_, u32>(&UpgradeGovernanceKey::StorageSchemaVersion)
+            .unwrap_or(0u32);
+        if schema_version != current_version {
+            return Err(ContractError::IncompatibleStateSchema);
+        }
+
         ug_execute_upgrade(
             &env,
             &admin,
@@ -1457,6 +1469,15 @@ mod test {
             .unwrap_err()
             .unwrap();
         assert_eq!(err, ContractError::IncompatibleStateSchema);
+
+        // Restore the schema so the re-proposal probes the pending state rather than
+        // tripping the same schema guard.
+        env.as_contract(&contract_id, || {
+            env.storage().instance().set(
+                &soroban_upgrade_governance_core::UpgradeGovernanceKey::StorageSchemaVersion,
+                &1u32,
+            );
+        });
 
         // Pending proposal should still exist; re-proposing should fail.
         env.mock_auths(&[MockAuth {
